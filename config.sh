@@ -22,6 +22,9 @@ CLAUDE_MODEL="haiku"
 # Minimal prompt — we just need to start the usage window.
 PING_PROMPT="hi"
 
+# Extra flags to pass to the claude CLI (e.g., "--dangerouslySkipPermissions").
+CLAUDE_EXTRA_FLAGS=""
+
 # Optional: cd into this directory before running claude.
 # Leave empty to use a temp directory.
 PING_WORKING_DIR=""

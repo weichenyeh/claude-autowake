@@ -41,12 +41,25 @@ done
 # ── Cancel pmset wake schedule ────────────────────────────────────────
 echo ""
 echo "Cancelling pmset wake schedule..."
+echo "  NOTE: 'pmset repeat cancel' removes ALL repeat schedules, not just autowake's."
 echo "  (This requires sudo — you may be prompted for your password)"
 
-if sudo pmset repeat cancel 2>/dev/null; then
-    echo "  pmset repeat schedule cancelled."
-else
+EXISTING_PMSET=$(pmset -g sched 2>/dev/null | grep -i "repeat" || true)
+if [ -z "$EXISTING_PMSET" ]; then
     echo "  No pmset repeat schedule found (skipping)"
+else
+    echo "  Current schedule:"
+    echo "$EXISTING_PMSET"
+    read -rp "  Cancel this schedule? [y/N] " answer
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+        if sudo pmset repeat cancel 2>/dev/null; then
+            echo "  pmset repeat schedule cancelled."
+        else
+            echo "  Failed to cancel pmset schedule."
+        fi
+    else
+        echo "  Keeping pmset repeat schedule."
+    fi
 fi
 
 # ── Optionally remove logs ────────────────────────────────────────────

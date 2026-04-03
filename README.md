@@ -19,6 +19,9 @@ vim config.sh
 
 # 3. Test it manually
 ./autowake.sh
+
+# 4. Check status
+./status.sh
 ```
 
 ## Configuration
@@ -34,6 +37,7 @@ Edit `config.sh` to customize:
 | `PING_PROMPT` | `"hi"` | What to send (keep it tiny) |
 | `CAFFEINATE_SECONDS` | `"auto"` | `"auto"` = span of ping times + 10 min buffer. Or set a number of seconds manually. |
 | `PING_WORKING_DIR` | `""` | Directory to cd into before running claude (temp dir if empty) |
+| `CLAUDE_EXTRA_FLAGS` | `""` | Extra flags for the claude CLI (e.g., `"--dangerouslySkipPermissions"`) |
 | `MAX_LOG_FILES` | `30` | Max log files to keep |
 
 ### Example Schedules

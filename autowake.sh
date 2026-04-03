@@ -29,23 +29,36 @@ prune_logs() {
     fi
 }
 
-# ── Lockfile (prevent overlapping runs) ───────────────────────────────
-LOCK_FILE="/tmp/claude-autowake.lock"
+# ── Cleanup ───────────────────────────────────────────────────────────
+LOCK_DIR="/tmp/claude-autowake.lock"
+_TEMP_DIR=""
 
+cleanup() {
+    [ -n "$_TEMP_DIR" ] && rm -rf "$_TEMP_DIR"
+    rm -rf "$LOCK_DIR"
+}
+trap cleanup EXIT
+
+# ── Lockfile (prevent overlapping runs) ───────────────────────────────
 acquire_lock() {
-    if [ -f "$LOCK_FILE" ]; then
-        local lock_pid
-        lock_pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
-        if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null; then
-            log "ERROR: Another ping is already running (PID $lock_pid). Exiting."
-            exit 1
-        else
-            log "WARN: Stale lockfile found (PID $lock_pid not running). Removing."
-            rm -f "$LOCK_FILE"
-        fi
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+        echo $$ > "$LOCK_DIR/pid"
+        return
     fi
-    echo $$ > "$LOCK_FILE"
-    trap 'rm -f "$LOCK_FILE"' EXIT
+
+    # Lock dir exists — check if the holder is still alive
+    local lock_pid
+    lock_pid=$(cat "$LOCK_DIR/pid" 2>/dev/null || echo "")
+    if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null; then
+        log "ERROR: Another ping is already running (PID $lock_pid). Exiting."
+        exit 1
+    fi
+
+    # Stale lock — reclaim it
+    log "WARN: Stale lock found (PID $lock_pid not running). Reclaiming."
+    rm -rf "$LOCK_DIR"
+    mkdir "$LOCK_DIR"
+    echo $$ > "$LOCK_DIR/pid"
 }
 
 # ── Main ping ─────────────────────────────────────────────────────────
@@ -65,7 +78,7 @@ run_ping() {
         WORK_DIR="$PING_WORKING_DIR"
     else
         WORK_DIR="$(mktemp -d)"
-        trap 'rm -rf "$WORK_DIR"; rm -f "$LOCK_FILE"' EXIT
+        _TEMP_DIR="$WORK_DIR"
     fi
 
     log "Working directory: $WORK_DIR"
@@ -83,10 +96,16 @@ run_ping() {
             start_time=$(date +%s)
         fi
 
-        if (cd "$WORK_DIR" && "$CLAUDE_BIN" --print --model "$CLAUDE_MODEL" -p "$PING_PROMPT") \
-            2>&1 | tee -a "$LOG_FILE"; then
+        # shellcheck disable=SC2086
+        local output
+        if output=$(cd "$WORK_DIR" && "$CLAUDE_BIN" --print --model "$CLAUDE_MODEL" $CLAUDE_EXTRA_FLAGS -p "$PING_PROMPT" 2>&1); then
+            echo "$output" | tee -a "$LOG_FILE"
             end_time=$(date +%s)
             duration=$(( end_time - start_time ))
+            # Check for auth/API errors in successful exit codes
+            if echo "$output" | grep -qiE "unauthorized|auth.*error|invalid.*key|rate.?limit|forbidden|expired"; then
+                log "WARNING: Ping exited 0 but output suggests an error. Check log."
+            fi
             log "=== Ping completed in ${duration}s ==="
             return 0
         else
@@ -95,6 +114,8 @@ run_ping() {
             log "=== Ping failed after ${duration}s (attempt $attempt/2) ==="
         fi
     done
+    log "ERROR: All ping attempts failed."
+    return 1
 }
 
 # ── Entry point ───────────────────────────────────────────────────────

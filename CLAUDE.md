@@ -21,6 +21,7 @@ Four shell scripts, no build system:
 ./install.sh       # Install launchd agents + pmset wake (requires sudo for pmset)
 ./uninstall.sh     # Remove everything
 ./autowake.sh      # Manual test ping
+./status.sh        # Check if everything is loaded and show last ping result
 ```
 
 ## Runtime Artifacts

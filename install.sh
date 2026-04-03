@@ -237,6 +237,22 @@ if [[ "$WEEKDAYS_ONLY" == "true" ]]; then
     PMSET_DAYS="MTWRF"
 fi
 
+# Check for existing pmset repeat schedule before overwriting
+EXISTING_PMSET=$(pmset -g sched 2>/dev/null | grep -i "repeat" || true)
+if [ -n "$EXISTING_PMSET" ]; then
+    echo "WARNING: An existing pmset repeat schedule was found:"
+    echo "$EXISTING_PMSET"
+    echo ""
+    echo "pmset only supports one repeat schedule. Installing autowake will replace it."
+    read -rp "Continue and overwrite? [y/N] " answer
+    if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+        echo "Skipping pmset wake schedule. You can set it manually later:"
+        echo "  sudo pmset repeat wakeorpoweron $PMSET_DAYS $WAKE_TIME"
+        SKIP_PMSET=true
+    fi
+fi
+
+if [ "${SKIP_PMSET:-}" != "true" ]; then
 echo "Setting pmset wake schedule: $PMSET_DAYS at $WAKE_TIME"
 echo "  (This requires sudo — you may be prompted for your password)"
 echo ""
@@ -247,6 +263,7 @@ else
     echo "  WARNING: Failed to set pmset wake schedule."
     echo "  You can set it manually: sudo pmset repeat wakeorpoweron $PMSET_DAYS $WAKE_TIME"
 fi
+fi  # SKIP_PMSET
 
 # ── Summary ───────────────────────────────────────────────────────────
 echo ""
