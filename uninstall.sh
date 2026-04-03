@@ -62,6 +62,13 @@ else
     fi
 fi
 
+# ── Remove installed scripts ──────────────────────────────────────────
+INSTALL_BIN_DIR="$HOME/.claude-autowake/bin"
+if [ -d "$INSTALL_BIN_DIR" ]; then
+    rm -rf "$INSTALL_BIN_DIR"
+    echo "  Removed installed scripts: $INSTALL_BIN_DIR"
+fi
+
 # ── Optionally remove logs ────────────────────────────────────────────
 echo ""
 if [ -d "$LOG_DIR" ]; then

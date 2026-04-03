@@ -6,9 +6,13 @@ source "$SCRIPT_DIR/config.sh"
 
 PLIST_LABEL="com.autowake.ping"
 PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
-AUTOWAKE_SCRIPT="$SCRIPT_DIR/autowake.sh"
 CAFFEINATE_LABEL="com.autowake.caffeinate"
 CAFFEINATE_PLIST="$HOME/Library/LaunchAgents/${CAFFEINATE_LABEL}.plist"
+
+# Scripts are copied to ~/.claude-autowake/bin/ at install time so that
+# launchd can access them without macOS TCC blocking reads from ~/Documents.
+INSTALL_BIN_DIR="$HOME/.claude-autowake/bin"
+AUTOWAKE_SCRIPT="$INSTALL_BIN_DIR/autowake.sh"
 
 echo "=== Claude Autowake Installer ==="
 echo ""
@@ -38,7 +42,7 @@ FIRST_TIME="${PING_TIMES[0]}"
 FIRST_HOUR=$((10#${FIRST_TIME%%:*}))
 FIRST_MINUTE=$((10#${FIRST_TIME##*:}))
 
-LAST_TIME="${PING_TIMES[-1]}"
+LAST_TIME="${PING_TIMES[${#PING_TIMES[@]}-1]}"
 LAST_HOUR=$((10#${LAST_TIME%%:*}))
 LAST_MINUTE=$((10#${LAST_TIME##*:}))
 
@@ -69,12 +73,19 @@ if ! command -v "$CLAUDE_BIN" &>/dev/null; then
     echo ""
 fi
 
-# Ensure scripts are executable
-chmod +x "$AUTOWAKE_SCRIPT"
+# Ensure source scripts are executable
+chmod +x "$SCRIPT_DIR/autowake.sh"
 chmod +x "$SCRIPT_DIR/uninstall.sh" 2>/dev/null || true
 
 # Create log directory
 mkdir -p "$LOG_DIR"
+
+# Copy scripts to a TCC-safe location (~/Documents is protected by macOS)
+echo "Copying scripts to $INSTALL_BIN_DIR ..."
+mkdir -p "$INSTALL_BIN_DIR"
+cp "$SCRIPT_DIR/autowake.sh" "$INSTALL_BIN_DIR/autowake.sh"
+cp "$SCRIPT_DIR/config.sh"   "$INSTALL_BIN_DIR/config.sh"
+chmod +x "$INSTALL_BIN_DIR/autowake.sh"
 
 # Ensure LaunchAgents directory exists
 mkdir -p "$HOME/Library/LaunchAgents"
@@ -278,7 +289,8 @@ echo "  Mac wakes at $WAKE_TIME (${WAKE_LEAD_MINUTES} min before first ping)"
 echo "  caffeinate keeps Mac awake for $(( CAFFEINATE_SECONDS / 60 )) min"
 echo ""
 echo "Logs:     $LOG_DIR"
-echo "Config:   $SCRIPT_DIR/config.sh"
+echo "Scripts:  $INSTALL_BIN_DIR"
+echo "Config:   $SCRIPT_DIR/config.sh (source — re-run install after edits)"
 echo ""
 echo "To test now:  ./autowake.sh"
 echo "To remove:    ./uninstall.sh"
