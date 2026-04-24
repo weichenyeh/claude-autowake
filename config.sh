@@ -19,7 +19,10 @@ PING_TIMES=("06:00")
 WAKE_LEAD_MINUTES=3
 
 # ── Claude CLI ────────────────────────────────────────────────────────
-CLAUDE_BIN="claude"
+# Absolute path — launchd runs in a non-interactive, non-login shell whose
+# PATH lacks ~/.local/bin. Using absolute path sidesteps PATH resolution.
+# Update this if claude moves (e.g. when switching machines).
+CLAUDE_BIN="/Users/yeweichen/.local/bin/claude"
 
 # Model to use — haiku is cheapest, just enough to start the window.
 CLAUDE_MODEL="haiku"

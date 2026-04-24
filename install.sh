@@ -215,18 +215,22 @@ if [ "${AUTOWAKE_SKIP_PMSET:-0}" = "1" ]; then
     SKIP_PMSET=true
 fi
 
-# Check for existing pmset repeat schedule before overwriting
-EXISTING_PMSET=$(pmset -g sched 2>/dev/null | grep -i "repeat" || true)
-if [ -n "$EXISTING_PMSET" ]; then
-    echo "WARNING: An existing pmset repeat schedule was found:"
-    echo "$EXISTING_PMSET"
-    echo ""
-    echo "pmset only supports one repeat schedule. Installing autowake will replace it."
-    read -rp "Continue and overwrite? [y/N] " answer
-    if [[ ! "$answer" =~ ^[Yy]$ ]]; then
-        echo "Skipping pmset wake schedule. You can set it manually later:"
-        echo "  sudo pmset repeat wakeorpoweron $PMSET_DAYS $WAKE_TIME"
-        SKIP_PMSET=true
+# Check for existing pmset repeat schedule before overwriting.
+# Only runs on first install (SKIP_PMSET unset); apply.sh sets SKIP_PMSET=true
+# so daily re-runs don't re-prompt or block on the read.
+if [ "${SKIP_PMSET:-}" != "true" ]; then
+    EXISTING_PMSET=$(pmset -g sched 2>/dev/null | grep -i "repeat" || true)
+    if [ -n "$EXISTING_PMSET" ]; then
+        echo "WARNING: An existing pmset repeat schedule was found:"
+        echo "$EXISTING_PMSET"
+        echo ""
+        echo "pmset only supports one repeat schedule. Installing autowake will replace it."
+        read -rp "Continue and overwrite? [y/N] " answer
+        if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+            echo "Skipping pmset wake schedule. You can set it manually later:"
+            echo "  sudo pmset repeat wakeorpoweron $PMSET_DAYS $WAKE_TIME"
+            SKIP_PMSET=true
+        fi
     fi
 fi
 
