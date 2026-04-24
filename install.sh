@@ -61,9 +61,6 @@ echo "Ping schedule:"
 for t in "${PING_TIMES[@]}"; do
     echo "  $t"
 done
-if [[ "$WEEKDAYS_ONLY" == "true" ]]; then
-    echo "  (weekdays only)"
-fi
 echo ""
 
 # ── Preflight checks ─────────────────────────────────────────────────
@@ -100,28 +97,13 @@ CALENDAR_ENTRIES=""
 for time in "${PING_TIMES[@]}"; do
     hour=$((10#${time%%:*}))
     minute=$((10#${time##*:}))
-    if [[ "$WEEKDAYS_ONLY" == "true" ]]; then
-        # launchd Weekday: 1=Mon ... 5=Fri
-        for day in 1 2 3 4 5; do
-            CALENDAR_ENTRIES+="
-            <dict>
-                <key>Weekday</key>
-                <integer>$day</integer>
-                <key>Hour</key>
-                <integer>$hour</integer>
-                <key>Minute</key>
-                <integer>$minute</integer>
-            </dict>"
-        done
-    else
-        CALENDAR_ENTRIES+="
+    CALENDAR_ENTRIES+="
             <dict>
                 <key>Hour</key>
                 <integer>$hour</integer>
                 <key>Minute</key>
                 <integer>$minute</integer>
             </dict>"
-    fi
 done
 
 cat > "$PLIST_PATH" << EOF
@@ -165,30 +147,12 @@ EOF
 # ── Generate caffeinate launchd plist ─────────────────────────────────
 echo "Generating caffeinate plist at: $CAFFEINATE_PLIST"
 
-CAFF_CALENDAR=""
-if [[ "$WEEKDAYS_ONLY" == "true" ]]; then
-    CAFF_CALENDAR="    <array>"
-    for day in 1 2 3 4 5; do
-        CAFF_CALENDAR+="
-        <dict>
-            <key>Weekday</key>
-            <integer>$day</integer>
-            <key>Hour</key>
-            <integer>${FIRST_HOUR}</integer>
-            <key>Minute</key>
-            <integer>${FIRST_MINUTE}</integer>
-        </dict>"
-    done
-    CAFF_CALENDAR+="
-    </array>"
-else
-    CAFF_CALENDAR="    <dict>
+CAFF_CALENDAR="    <dict>
         <key>Hour</key>
         <integer>${FIRST_HOUR}</integer>
         <key>Minute</key>
         <integer>${FIRST_MINUTE}</integer>
     </dict>"
-fi
 
 cat > "$CAFFEINATE_PLIST" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -244,8 +208,11 @@ fi
 WAKE_TIME=$(printf "%02d:%02d:00" "$WAKE_HOUR" "$WAKE_MINUTE")
 
 PMSET_DAYS="MTWRFSU"
-if [[ "$WEEKDAYS_ONLY" == "true" ]]; then
-    PMSET_DAYS="MTWRF"
+
+# Honor AUTOWAKE_SKIP_PMSET env var (set by apply.sh for non-first-run toggles)
+if [ "${AUTOWAKE_SKIP_PMSET:-0}" = "1" ]; then
+    echo "Skipping pmset wake schedule (AUTOWAKE_SKIP_PMSET=1)."
+    SKIP_PMSET=true
 fi
 
 # Check for existing pmset repeat schedule before overwriting
