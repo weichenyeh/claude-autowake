@@ -12,8 +12,8 @@ ENABLED=true
 
 # ── Schedule ──────────────────────────────────────────────────────────
 # Ping times in HH:MM (24-hour) format.
-# Must be >= 5 hours apart. install.sh will validate this.
-PING_TIMES=("06:00")
+# Must be >= 5 hours apart. sync.sh will validate this.
+PING_TIMES=("05:00")
 
 # Minutes before the first ping to wake the Mac from sleep.
 WAKE_LEAD_MINUTES=3

@@ -14,7 +14,7 @@ CAFFEINATE_PLIST="$HOME/Library/LaunchAgents/${CAFFEINATE_LABEL}.plist"
 INSTALL_BIN_DIR="$HOME/.claude-autowake/bin"
 AUTOWAKE_SCRIPT="$INSTALL_BIN_DIR/autowake.sh"
 
-echo "=== Claude Autowake Installer ==="
+echo "=== Claude Autowake Sync ==="
 echo ""
 
 # ── Validate ping times are >= 5h apart ───────────────────────────────
@@ -209,14 +209,14 @@ WAKE_TIME=$(printf "%02d:%02d:00" "$WAKE_HOUR" "$WAKE_MINUTE")
 
 PMSET_DAYS="MTWRFSU"
 
-# Honor AUTOWAKE_SKIP_PMSET env var (set by apply.sh for non-first-run toggles)
+# Honor AUTOWAKE_SKIP_PMSET env var (set by toggle.sh for non-first-run toggles)
 if [ "${AUTOWAKE_SKIP_PMSET:-0}" = "1" ]; then
     echo "Skipping pmset wake schedule (AUTOWAKE_SKIP_PMSET=1)."
     SKIP_PMSET=true
 fi
 
 # Check for existing pmset repeat schedule before overwriting.
-# Only runs on first install (SKIP_PMSET unset); apply.sh sets SKIP_PMSET=true
+# Only runs on first sync (SKIP_PMSET unset); toggle.sh sets SKIP_PMSET=true
 # so daily re-runs don't re-prompt or block on the read.
 if [ "${SKIP_PMSET:-}" != "true" ]; then
     EXISTING_PMSET=$(pmset -g sched 2>/dev/null | grep -i "repeat" || true)
@@ -249,7 +249,7 @@ fi  # SKIP_PMSET
 
 # ── Summary ───────────────────────────────────────────────────────────
 echo ""
-echo "=== Installation Complete ==="
+echo "=== Sync Complete ==="
 echo ""
 echo "Schedule (one message to $CLAUDE_MODEL per slot):"
 for t in "${PING_TIMES[@]}"; do
@@ -261,7 +261,7 @@ echo "  caffeinate keeps Mac awake for $(( CAFFEINATE_SECONDS / 60 )) min"
 echo ""
 echo "Logs:     $LOG_DIR"
 echo "Scripts:  $INSTALL_BIN_DIR"
-echo "Config:   $SCRIPT_DIR/config.sh (source — re-run install after edits)"
+echo "Config:   $SCRIPT_DIR/config.sh (source — re-run ./sync.sh after edits)"
 echo ""
 echo "To test now:  ./autowake.sh"
 echo "To remove:    ./uninstall.sh"

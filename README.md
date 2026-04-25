@@ -14,8 +14,8 @@ Each ping is one message (`"hi"`) to the cheapest model (Haiku) — minimal toke
 # 1. Edit config.sh to set your preferred schedule
 vim config.sh
 
-# 2. Install (sets up launchd + pmset wake schedule)
-./install.sh
+# 2. Sync system to config (sets up launchd + pmset wake schedule)
+./sync.sh
 
 # 3. Test it manually
 ./autowake.sh
@@ -23,6 +23,9 @@ vim config.sh
 # 4. Check status
 ./status.sh
 ```
+
+**Daily on/off** (no sudo): edit `ENABLED` in `config.sh`, run `./toggle.sh`.
+**Schedule change** (re-prompts sudo for pmset): edit `PING_TIMES` etc., re-run `./sync.sh`.
 
 ## Configuration
 
@@ -32,7 +35,7 @@ Edit `config.sh` to customize:
 |---------|---------|-------------|
 | `PING_TIMES` | `("06:00")` | Array of ping times in HH:MM 24h format. Must be >= 5h apart. |
 | `WAKE_LEAD_MINUTES` | `3` | Minutes before first ping to wake Mac from sleep |
-| `WEEKDAYS_ONLY` | `false` | Skip weekends when `true` |
+| `ENABLED` | `true` | Master switch. `false` unloads agents (plists kept on disk). |
 | `CLAUDE_MODEL` | `"haiku"` | Model to ping (haiku = cheapest) |
 | `PING_PROMPT` | `"hi"` | What to send (keep it tiny) |
 | `CAFFEINATE_SECONDS` | `"auto"` | `"auto"` = span of ping times + 10 min buffer. Or set a number of seconds manually. |
