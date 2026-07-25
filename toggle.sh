@@ -5,15 +5,53 @@
 # Does NOT touch pmset wake schedule. Use ./sync.sh for schedule changes.
 #
 # Usage:
-#   1. Edit ENABLED in config.sh
-#   2. Run: ./toggle.sh
+#   ./toggle.sh on     — set ENABLED=true in config.sh, then load the agents
+#   ./toggle.sh off    — set ENABLED=false in config.sh, then unload them
+#   ./toggle.sh        — act on whatever ENABLED already says in config.sh
 #
 # First-time setup or schedule change: run ./sync.sh (requires sudo for pmset).
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/config.sh"
+CONFIG_FILE="$SCRIPT_DIR/config.sh"
+
+# ── Argument ──────────────────────────────────────────────────────────
+# The on/off argument writes ENABLED into config.sh rather than only acting for
+# this one run, because config.sh has to stay the single source of truth: if
+# `off` merely unloaded the agents, the next ./sync.sh would read ENABLED=true
+# and load them again — the argument and the file would disagree, and the file
+# would win without saying so.
+#
+# An unrecognised argument is a hard error. Silently ignoring it is how
+# `./toggle.sh off` used to *enable* autowake.
+DESIRED=""
+case "${1:-}" in
+    on)  DESIRED=true  ;;
+    off) DESIRED=false ;;
+    "")  ;;
+    -h|--help|help)
+        echo "Usage: ./toggle.sh [on|off]"
+        echo "  on   set ENABLED=true in config.sh, then load the launchd agents"
+        echo "  off  set ENABLED=false in config.sh, then unload them"
+        echo "  (no argument)  act on whatever ENABLED already says"
+        exit 0
+        ;;
+    *)
+        echo "toggle.sh: unknown argument '$1'" >&2
+        echo "Usage: ./toggle.sh [on|off]" >&2
+        exit 2
+        ;;
+esac
+
+if [[ -n "$DESIRED" ]]; then
+    # BSD sed (macOS) requires an explicit empty suffix for in-place editing.
+    sed -i '' "s/^ENABLED=.*/ENABLED=$DESIRED/" "$CONFIG_FILE"
+    echo "config.sh: ENABLED=$DESIRED"
+    echo ""
+fi
+
+source "$CONFIG_FILE"
 
 PLIST_LABEL="com.autowake.ping"
 CAFFEINATE_LABEL="com.autowake.caffeinate"
@@ -40,7 +78,7 @@ if [[ "${ENABLED:-false}" != "true" ]]; then
 
     echo ""
     echo "Disabled. plist files retained on disk; pmset wake kept (harmless)."
-    echo "To re-enable: set ENABLED=true in config.sh and run ./toggle.sh"
+    echo "To re-enable: ./toggle.sh on"
     exit 0
 fi
 

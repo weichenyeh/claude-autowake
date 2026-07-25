@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# status.sh — report what autowake is currently doing. Read-only.
+#
+# No `set -e` here, on purpose: a status script must keep printing even when one
+# section cannot be read. Aborting halfway is worse than one missing line,
+# because a truncated report still looks like a complete one. Each section below
+# guards itself instead.
+set -uo pipefail
 
 PLIST_LABEL="com.autowake.ping"
 CAFFEINATE_LABEL="com.autowake.caffeinate"
@@ -26,16 +32,17 @@ PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 echo ""
 echo "Ping schedule:"
 if [ -f "$PLIST_PATH" ]; then
-    # Extract hour/minute pairs from the plist
-    /usr/libexec/PlistBuddy -c "Print :StartCalendarInterval" "$PLIST_PATH" 2>/dev/null \
-        | grep -E "Hour|Minute" \
-        | paste - - \
-        | while read -r h_line m_line; do
-            hour=$(echo "$h_line" | grep -oE '[0-9]+')
-            minute=$(echo "$m_line" | grep -oE '[0-9]+')
-            printf "  %02d:%02d\n" "$hour" "$minute"
-          done
-    if [ $? -ne 0 ]; then
+    # PlistBuddy prints "Hour = H" then "Minute = M" for each scheduled time.
+    # awk pairs them by remembering the last Hour and printing when Minute
+    # arrives; $NF is the value whatever the indentation. The previous version
+    # used `read -r h_line m_line`, which split "Hour = 7" on whitespace and
+    # left h_line as the bare word "Hour" — the digit grep then found nothing,
+    # returned 1, and killed the whole script under `set -e`.
+    TIMES=$(/usr/libexec/PlistBuddy -c "Print :StartCalendarInterval" "$PLIST_PATH" 2>/dev/null \
+        | awk '/Hour/ { h = $NF } /Minute/ { printf "  %02d:%02d\n", h, $NF }')
+    if [ -n "$TIMES" ]; then
+        echo "$TIMES"
+    else
         echo "  (could not parse plist)"
     fi
 else

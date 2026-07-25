@@ -12,17 +12,26 @@ Four shell scripts, no build system:
 
 - **config.sh** — All user-configurable settings (ping times, model, weekday-only flag, caffeinate duration). Sourced by other scripts.
 - **autowake.sh** — The ping runner. Sends one message to Claude CLI (`claude --print --model haiku -p "hi"`). Has lockfile protection, retry logic (2 attempts, 60s gap), and log pruning.
-- **install.sh** — Generates two launchd plists (`com.autowake.ping` for scheduled pings, `com.autowake.caffeinate` to keep the Mac awake), loads them via `launchctl bootstrap`, and sets a `pmset repeat wakeorpoweron` schedule. Validates that ping times are >= 5h apart.
+- **sync.sh** — Generates two launchd plists (`com.autowake.ping` for scheduled pings, `com.autowake.caffeinate` to keep the Mac awake), loads them via `launchctl bootstrap`, and sets a `pmset repeat wakeorpoweron` schedule. Validates that ping times are >= 5h apart. Set `AUTOWAKE_SKIP_PMSET=1` to skip the only step that needs sudo.
+- **toggle.sh** — Enables or disables autowake without touching the schedule. Writes `ENABLED` into config.sh, then loads or unloads the agents. Rejects an unrecognised argument instead of falling through to "enable".
+- **status.sh** — Read-only report: which agents are loaded, the ping times, the pmset wake time, and the last ping result. Deliberately has no `set -e`, so one unreadable section cannot truncate the rest.
 - **uninstall.sh** — Reverses install: unloads agents, removes plists, cancels pmset, optionally deletes logs.
 
 ## Key Commands
 
 ```bash
-./install.sh       # Install launchd agents + pmset wake (requires sudo for pmset)
-./uninstall.sh     # Remove everything
+./sync.sh          # Install/re-sync launchd agents + pmset wake (sudo for pmset only)
+./toggle.sh on     # Enable  (no sudo)
+./toggle.sh off    # Disable (no sudo)
+./status.sh        # Report loaded agents, schedule, pmset wake, last ping result
 ./autowake.sh      # Manual test ping
-./status.sh        # Check if everything is loaded and show last ping result
+./uninstall.sh     # Remove everything
 ```
+
+Only `autowake.sh` and `config.sh` get copied into `~/.claude-autowake/bin/`, which is
+what launchd actually runs. `toggle.sh` / `status.sh` / `sync.sh` run from the repo. So a
+`git pull` is enough for those three, but changes to `autowake.sh` need `./sync.sh` to
+take effect.
 
 ## Runtime Artifacts
 
