@@ -137,6 +137,12 @@ CAFFEINATE_SECONDS="auto"
 # Secret, so it comes from local.env and never from this file. Empty means
 # the push is skipped and autowake behaves exactly as before.
 KUMA_PUSH_URL="$(autowake_local KUMA_PUSH_URL)"
+# Kuma's UI displays the push URL with a sample query string already on it
+# (?status=up&msg=OK&ping=). Pasted as-is, those would sit in front of the
+# parameters added at push time, and a stale status=up could outrank the real
+# one — a failure reported as success. Trim at the first '?' so either form
+# of the URL works.
+KUMA_PUSH_URL="${KUMA_PUSH_URL%%\?*}"
 
 # ── Logging ───────────────────────────────────────────────────────────
 LOG_DIR="$HOME/.claude-autowake/logs"
