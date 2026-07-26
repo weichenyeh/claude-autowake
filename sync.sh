@@ -259,7 +259,12 @@ fi
 # carry on. Skipping silently is the same failure as a green light that lies —
 # the schedule would drift out of sync with no trace.
 if [ "${SKIP_PMSET:-}" != "true" ] && [ ! -t 0 ]; then
-    echo "NOTICE: pmset wake needs updating to $WAKE_TIME (currently: ${CURRENT_MINUTES}),"
+    if [ "$CURRENT_MINUTES" = "none" ]; then
+        CURRENT_HUMAN="not set"
+    else
+        CURRENT_HUMAN="$(printf '%02d:%02d' $(( CURRENT_MINUTES / 60 )) $(( CURRENT_MINUTES % 60 )))"
+    fi
+    echo "NOTICE: pmset wake should be $WAKE_TIME but is $CURRENT_HUMAN,"
     echo "        but this is a non-interactive session so sudo cannot prompt."
     echo "        Run this on the machine when convenient:"
     echo "          sudo pmset repeat wakeorpoweron $PMSET_DAYS $WAKE_TIME"
@@ -290,7 +295,17 @@ for t in "${PING_TIMES[@]}"; do
     echo "  $t"
 done
 echo ""
-echo "  Mac wakes at $WAKE_TIME (${WAKE_LEAD_MINUTES} min before first ping)"
+# Report what pmset actually holds, not what was requested. Printing the
+# desired time after declining to set it would be a summary that lies.
+ACTUAL_MINUTES="$(pmset_current_minutes || echo "none")"
+if [ "$ACTUAL_MINUTES" = "$DESIRED_MINUTES" ]; then
+    echo "  Mac wakes at $WAKE_TIME (${WAKE_LEAD_MINUTES} min before first ping)"
+elif [ "$ACTUAL_MINUTES" = "none" ]; then
+    echo "  Mac wake: NOT scheduled (pmset unset — see notice above)"
+else
+    echo "  Mac wake: still $(printf '%02d:%02d' $(( ACTUAL_MINUTES / 60 )) $(( ACTUAL_MINUTES % 60 ))), not the $WAKE_TIME this schedule wants"
+    echo "            (see the pmset notice above; harmless while this Mac never sleeps)"
+fi
 echo "  caffeinate keeps Mac awake for $(( CAFFEINATE_SECONDS / 60 )) min"
 echo ""
 echo "Logs:     $LOG_DIR"
