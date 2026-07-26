@@ -38,16 +38,63 @@ autowake_local() {
         || true
 }
 
+# Write one key, replacing any existing line for it. Used by toggle.sh and
+# schedule.sh so that changing this machine's state never edits a tracked
+# file — that is what used to leave the repo dirty and make the next
+# `git pull` conflict.
+#
+# The rewrite goes through a temp file and is copied back with `cat` rather
+# than `mv`, so the original file keeps its inode and its 600 permissions
+# instead of inheriting mktemp's.
+autowake_local_set() {
+    local key="$1" value="$2" tmp
+    mkdir -p "$(dirname "$AUTOWAKE_LOCAL_FILE")"
+    [ -f "$AUTOWAKE_LOCAL_FILE" ] || : > "$AUTOWAKE_LOCAL_FILE"
+    tmp="$(mktemp)"
+    grep -vE "^${key}=" "$AUTOWAKE_LOCAL_FILE" > "$tmp" || true
+    printf '%s=%s\n' "$key" "$value" >> "$tmp"
+    cat "$tmp" > "$AUTOWAKE_LOCAL_FILE"
+    rm -f "$tmp"
+    # Enforced on every write, not just on creation: the file holds the push
+    # URL, and a copy made by hand (or by a shell redirect) lands at 644 under
+    # the default umask and would otherwise stay readable by everyone.
+    chmod 600 "$AUTOWAKE_LOCAL_FILE"
+}
+
 # ── Master switch ─────────────────────────────────────────────────────
-# Whether autowake is enabled.
-#   true  = launchd agents loaded, ping fires at PING_TIMES daily
-#   false = launchd agents unloaded (plists retained, pmset kept — harmless)
-ENABLED=true
+# Whether autowake pings Claude.
+#   true  = the daily run pings Claude
+#   false = the daily run still reports in to Kuma, but never calls Claude
+#
+# Note that `false` does NOT unload the ping agent. The agent has to keep
+# firing, because something must run in order to report; unloading it would
+# make Kuma alarm 24 hours later for a state the user chose on purpose. A
+# disabled autowake costs no tokens — it just curls a heartbeat and exits.
+#
+# This is machine state, so it lives in local.env. Change it with
+# ./toggle.sh on|off, never by editing this file.
+ENABLED="$(autowake_local ENABLED)"
+ENABLED="${ENABLED:-true}"
 
 # ── Schedule ──────────────────────────────────────────────────────────
-# Ping times in HH:MM (24-hour) format.
+# Ping times in HH:MM (24-hour). Comma-separate several: 08:00,13:00
 # Must be >= 5 hours apart. sync.sh will validate this.
-PING_TIMES=("08:00")
+#
+# Also machine state — set it with ./schedule.sh HH:MM. The value below is
+# only the fallback for a machine that has no local.env yet.
+_raw_ping_times="$(autowake_local PING_TIMES)"
+if [ -n "$_raw_ping_times" ]; then
+    PING_TIMES=()
+    # Trim spaces around each entry so "08:00, 13:00" works as typed.
+    while IFS= read -r _t; do
+        _t="${_t#"${_t%%[![:space:]]*}"}"
+        _t="${_t%"${_t##*[![:space:]]}"}"
+        [ -n "$_t" ] && PING_TIMES+=("$_t")
+    done <<< "$(printf '%s' "$_raw_ping_times" | tr ',' '\n')"
+else
+    PING_TIMES=("08:00")
+fi
+unset _raw_ping_times _t
 
 # Minutes before the first ping to wake the Mac from sleep.
 WAKE_LEAD_MINUTES=3

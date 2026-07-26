@@ -163,6 +163,19 @@ run_ping() {
 
 # ── Entry point ───────────────────────────────────────────────────────
 prune_logs
+
+# Disabled is a reported state, not silence. The monitor answers "is autowake
+# alive", not "did it ping today", so a run the user switched off still checks
+# in as up. Staying quiet instead would make Kuma alarm a day later about
+# something deliberate, and a monitor that cries wolf gets ignored.
+#
+# Claude is never called on this path, so being disabled costs no tokens.
+if [ "${ENABLED:-true}" != "true" ]; then
+    log "Autowake is disabled (ENABLED=false in local.env) — Claude not called."
+    kuma_push up "disabled by user"
+    exit 0
+fi
+
 acquire_lock
 
 # run_ping is called as an `if` condition so `set -e` does not abort before

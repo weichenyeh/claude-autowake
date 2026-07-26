@@ -189,11 +189,19 @@ echo "Loading launchd agents..."
 launchctl bootout "gui/$(id -u)/${PLIST_LABEL}" 2>/dev/null || true
 launchctl bootout "gui/$(id -u)/${CAFFEINATE_LABEL}" 2>/dev/null || true
 
+# The ping agent loads regardless of ENABLED, because it is also what reports
+# autowake's state to the monitor. When disabled it sends a heartbeat and
+# exits without calling Claude.
 launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH"
-launchctl bootstrap "gui/$(id -u)" "$CAFFEINATE_PLIST"
-
 echo "  Loaded: $PLIST_LABEL"
-echo "  Loaded: $CAFFEINATE_LABEL"
+
+# caffeinate only makes sense when a ping is actually going to happen.
+if [ "${ENABLED:-true}" = "true" ]; then
+    launchctl bootstrap "gui/$(id -u)" "$CAFFEINATE_PLIST"
+    echo "  Loaded: $CAFFEINATE_LABEL"
+else
+    echo "  Skipped: $CAFFEINATE_LABEL (ENABLED=false)"
+fi
 
 # ── Schedule pmset wake ───────────────────────────────────────────────
 echo ""
@@ -215,23 +223,49 @@ if [ "${AUTOWAKE_SKIP_PMSET:-0}" = "1" ]; then
     SKIP_PMSET=true
 fi
 
-# Check for existing pmset repeat schedule before overwriting.
-# Only runs on first sync (SKIP_PMSET unset); toggle.sh sets SKIP_PMSET=true
-# so daily re-runs don't re-prompt or block on the read.
-if [ "${SKIP_PMSET:-}" != "true" ]; then
-    EXISTING_PMSET=$(pmset -g sched 2>/dev/null | grep -i "repeat" || true)
-    if [ -n "$EXISTING_PMSET" ]; then
-        echo "WARNING: An existing pmset repeat schedule was found:"
-        echo "$EXISTING_PMSET"
-        echo ""
-        echo "pmset only supports one repeat schedule. Installing autowake will replace it."
-        read -rp "Continue and overwrite? [y/N] " answer
-        if [[ ! "$answer" =~ ^[Yy]$ ]]; then
-            echo "Skipping pmset wake schedule. You can set it manually later:"
-            echo "  sudo pmset repeat wakeorpoweron $PMSET_DAYS $WAKE_TIME"
-            SKIP_PMSET=true
-        fi
-    fi
+# Decide whether pmset needs touching at all, by comparing instead of asking.
+#
+# The old version prompted "overwrite? [y/N]" whenever any repeat schedule
+# existed — but the schedule it found was almost always autowake's own, so the
+# question was noise. Worse, over SSH the read got EOF and `set -e` killed the
+# whole script *after* the agents were loaded but before pmset, leaving a
+# half-applied sync. Comparing the times removes the question in the normal
+# case rather than working around it.
+pmset_current_minutes() {
+    local line t h m ampm
+    line="$(pmset -g sched 2>/dev/null | grep -iE 'wake(or)?poweron' | head -1 || true)"
+    [ -n "$line" ] || return 1
+    t="$(printf '%s' "$line" | grep -oE '[0-9]{1,2}:[0-9]{2}(AM|PM)' | head -1 || true)"
+    [ -n "$t" ] || return 1
+    h="${t%%:*}"
+    m="${t#*:}"
+    ampm="${m: -2}"
+    m="${m%??}"
+    h=$((10#$h)); m=$((10#$m))
+    if [ "$ampm" = "PM" ] && [ "$h" -ne 12 ]; then h=$(( h + 12 )); fi
+    if [ "$ampm" = "AM" ] && [ "$h" -eq 12 ]; then h=0; fi
+    echo $(( h * 60 + m ))
+}
+
+DESIRED_MINUTES=$(( 10#$WAKE_HOUR * 60 + 10#$WAKE_MINUTE ))
+CURRENT_MINUTES="$(pmset_current_minutes || echo "none")"
+
+if [ "${SKIP_PMSET:-}" != "true" ] && [ "$CURRENT_MINUTES" = "$DESIRED_MINUTES" ]; then
+    echo "pmset wake already at $WAKE_TIME — no change needed, no sudo."
+    SKIP_PMSET=true
+fi
+
+# pmset needs a real update but nobody can type a password: say so clearly and
+# carry on. Skipping silently is the same failure as a green light that lies —
+# the schedule would drift out of sync with no trace.
+if [ "${SKIP_PMSET:-}" != "true" ] && [ ! -t 0 ]; then
+    echo "NOTICE: pmset wake needs updating to $WAKE_TIME (currently: ${CURRENT_MINUTES}),"
+    echo "        but this is a non-interactive session so sudo cannot prompt."
+    echo "        Run this on the machine when convenient:"
+    echo "          sudo pmset repeat wakeorpoweron $PMSET_DAYS $WAKE_TIME"
+    echo "        Harmless while this Mac never sleeps. Check with:"
+    echo "          pmset -g custom | grep -E '^ sleep'"
+    SKIP_PMSET=true
 fi
 
 if [ "${SKIP_PMSET:-}" != "true" ]; then

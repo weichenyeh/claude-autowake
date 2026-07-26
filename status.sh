@@ -14,7 +14,25 @@ LOG_DIR="$HOME/.claude-autowake/logs"
 echo "=== Claude Autowake Status ==="
 echo ""
 
+# ── Enabled state ─────────────────────────────────────────────────────
+# This has to come first and be unmissable. Since `off` deliberately leaves
+# the ping agent loaded so it can keep reporting to Kuma, "agent: loaded" no
+# longer means "it will ping Claude" — those are now two separate facts, and
+# reading the agent line alone would be misleading.
+LOCAL_FILE="$HOME/.claude-autowake/local.env"
+ENABLED_VALUE="$(grep -E '^ENABLED=' "$LOCAL_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '[:space:]')"
+ENABLED_VALUE="${ENABLED_VALUE:-true}"
+
+if [ "$ENABLED_VALUE" = "true" ]; then
+    echo "Enabled:  YES — pings Claude on schedule"
+else
+    echo "Enabled:  NO — disabled, no tokens used"
+    echo "          (agent stays loaded to report 'disabled' to Kuma daily)"
+    echo "          Re-enable with: ./toggle.sh on"
+fi
+
 # ── launchd agents ────────────────────────────────────────────────────
+echo ""
 echo "Launchd agents:"
 if launchctl list "$PLIST_LABEL" &>/dev/null; then
     echo "  $PLIST_LABEL: loaded"
@@ -64,7 +82,6 @@ fi
 # and is deliberately never printed — status.sh output gets pasted around.
 echo ""
 echo "Kuma push:"
-LOCAL_FILE="$HOME/.claude-autowake/local.env"
 if [ -f "$LOCAL_FILE" ] && grep -qE '^KUMA_PUSH_URL=.+' "$LOCAL_FILE" 2>/dev/null; then
     echo "  configured ($LOCAL_FILE)"
     LAST_BEAT=$(ls -1t "$LOG_DIR"/ping_*.log 2>/dev/null | head -1)

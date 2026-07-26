@@ -13,8 +13,9 @@ Four shell scripts, no build system:
 - **config.sh** — All user-configurable settings (ping times, model, weekday-only flag, caffeinate duration). Sourced by other scripts. Reads secrets and machine-specific paths from `~/.claude-autowake/local.env` one key at a time rather than sourcing it, so nothing in that file can execute or redefine settings.
 - **autowake.sh** — The ping runner. Sends one message to Claude CLI (`claude --print --model haiku -p "hi"`). Has lockfile protection, retry logic (2 attempts, 60s gap), log pruning, and an Uptime Kuma heartbeat.
 - **sync.sh** — Generates two launchd plists (`com.autowake.ping` for scheduled pings, `com.autowake.caffeinate` to keep the Mac awake), loads them via `launchctl bootstrap`, and sets a `pmset repeat wakeorpoweron` schedule. Validates that ping times are >= 5h apart. Set `AUTOWAKE_SKIP_PMSET=1` to skip the only step that needs sudo.
-- **toggle.sh** — Enables or disables autowake without touching the schedule. Writes `ENABLED` into config.sh, then loads or unloads the agents. Rejects an unrecognised argument instead of falling through to "enable".
-- **status.sh** — Read-only report: which agents are loaded, the ping times, the pmset wake time, and the last ping result. Deliberately has no `set -e`, so one unreadable section cannot truncate the rest.
+- **toggle.sh** — Enables or disables autowake without touching the schedule. Writes `ENABLED` into `local.env`, then brings the agents into line. Rejects an unrecognised argument instead of falling through to "enable".
+- **schedule.sh** — Changes the ping times. Validates `HH:MM`, writes `PING_TIMES` into `local.env`, then re-runs sync.sh.
+- **status.sh** — Read-only report: enabled state, which agents are loaded, the ping times, the pmset wake time, Kuma push config, and the last ping result. Deliberately has no `set -e`, so one unreadable section cannot truncate the rest.
 - **uninstall.sh** — Reverses install: unloads agents, removes plists, cancels pmset, optionally deletes logs.
 
 ## Key Commands
@@ -53,6 +54,24 @@ modes that report down: ping failed both attempts, `claude` binary missing, and 
 output matches the auth/rate-limit pattern.
 
 With `KUMA_PUSH_URL` unset the push is skipped entirely and behaviour is unchanged.
+
+### Disabled is a reported state, not silence
+
+`./toggle.sh off` does **not** unload the ping agent. The agent is what reports
+autowake's state each day, so unloading it would make Kuma alarm 24 hours later
+about something the user chose on purpose — and a monitor that cries wolf gets
+ignored, which costs more than the false alarm itself.
+
+When disabled, the daily run sends `status=up` with `msg=disabled by user` and
+exits **without calling Claude**, so a disabled autowake uses no tokens. Only
+the caffeinate agent is unloaded, since keeping the Mac awake for a ping that
+will not happen has no purpose.
+
+The consequence to keep in mind: **"agent loaded" no longer implies "it will
+ping"**. Those are two separate facts, which is why `status.sh` reports the
+enabled state first and unmissably. The accepted trade-off is that autowake can
+sit disabled indefinitely without Kuma complaining — deliberate, because the
+monitor's job is defined as "is autowake alive", not "did it ping today".
 
 ## Runtime Artifacts
 
