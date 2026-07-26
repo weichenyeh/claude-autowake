@@ -93,9 +93,11 @@ else
     echo "  not configured — no dead man's switch on this machine"
 fi
 
-# ── Last ping result ─────────────────────────────────────────────────
+# ── Last run result ──────────────────────────────────────────────────
+# "run", not "ping": a disabled run reports to Kuma without pinging Claude,
+# so labelling every run a ping would describe some of them wrongly.
 echo ""
-echo "Last ping:"
+echo "Last run:"
 if [ -d "$LOG_DIR" ]; then
     LATEST=$(ls -1t "$LOG_DIR"/ping_*.log 2>/dev/null | head -1)
     if [ -n "$LATEST" ]; then
