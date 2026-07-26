@@ -61,6 +61,34 @@ acquire_lock() {
     echo $$ > "$LOCK_DIR/pid"
 }
 
+# ── Kuma heartbeat ────────────────────────────────────────────────────
+# Report the run to the Uptime Kuma Push monitor. Kuma's half of the deal is
+# to shout when no heartbeat lands inside the window; ours is to tell it the
+# truth about which kind of heartbeat this was.
+#
+# The URL is a secret and is never logged — only the status and message are.
+# A failed push is left to the monitor itself: if curl cannot reach Kuma, no
+# heartbeat arrives, the window expires, and the alert fires anyway.
+PING_DURATION=0
+PING_FAIL_REASON=""
+
+kuma_push() {
+    local status="$1" msg="$2"
+    [ -n "${KUMA_PUSH_URL:-}" ] || return 0
+
+    # --get + --data-urlencode builds the query string with proper escaping,
+    # so a message containing spaces or & cannot corrupt the request.
+    if curl -fsS -m 10 --get \
+        --data-urlencode "status=$status" \
+        --data-urlencode "msg=$msg" \
+        --data-urlencode "ping=$PING_DURATION" \
+        "$KUMA_PUSH_URL" >/dev/null 2>&1; then
+        log "Kuma heartbeat sent (status=$status)."
+    else
+        log "WARNING: Kuma heartbeat failed to send (status=$status)."
+    fi
+}
+
 # ── Main ping ─────────────────────────────────────────────────────────
 run_ping() {
     # Pick a random message from the configured list
@@ -70,11 +98,14 @@ run_ping() {
     log "Model: $CLAUDE_MODEL"
     log "Message: $PING_PROMPT"
 
-    # Verify claude is accessible
+    # Verify claude is accessible. This returns rather than exits so the
+    # caller still gets to report the failure to Kuma — a missing binary is
+    # exactly the kind of silent breakage the monitor exists to catch.
     if ! command -v "$CLAUDE_BIN" &>/dev/null; then
         log "ERROR: '$CLAUDE_BIN' not found in PATH."
         log "PATH=$PATH"
-        exit 1
+        PING_FAIL_REASON="claude binary not found"
+        return 1
     fi
 
     # Set working directory
@@ -88,7 +119,7 @@ run_ping() {
     log "Working directory: $WORK_DIR"
     log "Sending ping to Claude ($CLAUDE_MODEL)..."
 
-    local start_time end_time duration
+    local start_time end_time
     start_time=$(date +%s)
 
     # Single message to haiku — just enough to start the usage window
@@ -105,24 +136,41 @@ run_ping() {
         if output=$(cd "$WORK_DIR" && "$CLAUDE_BIN" --print --model "$CLAUDE_MODEL" $CLAUDE_EXTRA_FLAGS -p "$PING_PROMPT" 2>&1); then
             echo "$output" | tee -a "$LOG_FILE"
             end_time=$(date +%s)
-            duration=$(( end_time - start_time ))
-            # Check for auth/API errors in successful exit codes
+            PING_DURATION=$(( end_time - start_time ))
+            # An auth failure or a rate limit still exits 0, so exit code alone
+            # cannot tell success from failure here. Treating that as "up"
+            # would leave Kuma showing a green light that lies, which is worse
+            # than having no monitor at all — so it returns a distinct failure.
+            # No retry: neither expired credentials nor a rate limit resolves
+            # in 60 seconds.
             if echo "$output" | grep -qiE "unauthorized|auth.*error|invalid.*key|rate.?limit|forbidden|expired"; then
-                log "WARNING: Ping exited 0 but output suggests an error. Check log."
+                log "ERROR: Ping exited 0 but output suggests an error. Check log."
+                PING_FAIL_REASON="exit 0 but output matched an auth/rate-limit pattern"
+                return 2
             fi
-            log "=== Ping completed in ${duration}s ==="
+            log "=== Ping completed in ${PING_DURATION}s ==="
             return 0
         else
             end_time=$(date +%s)
-            duration=$(( end_time - start_time ))
-            log "=== Ping failed after ${duration}s (attempt $attempt/2) ==="
+            PING_DURATION=$(( end_time - start_time ))
+            log "=== Ping failed after ${PING_DURATION}s (attempt $attempt/2) ==="
         fi
     done
     log "ERROR: All ping attempts failed."
+    PING_FAIL_REASON="all $attempt attempts failed"
     return 1
 }
 
 # ── Entry point ───────────────────────────────────────────────────────
 prune_logs
 acquire_lock
-run_ping
+
+# run_ping is called as an `if` condition so `set -e` does not abort before
+# the failure has been reported. Its exit code is preserved for launchd.
+if run_ping; then
+    kuma_push up "ping ok"
+else
+    rc=$?
+    kuma_push down "${PING_FAIL_REASON:-ping failed}"
+    exit "$rc"
+fi

@@ -1,1 +1,6 @@
 .claude
+
+# Machine-local overrides live at ~/.claude-autowake/local.env, outside the
+# repo. This entry is a guard in case a copy ever lands here by hand — the
+# file holds the Kuma push URL and must never reach a public repo.
+local.env

@@ -59,6 +59,23 @@ else
     echo "  No wake schedule set"
 fi
 
+# ── Kuma heartbeat ────────────────────────────────────────────────────
+# Reports only whether a push URL is configured. The URL itself is a secret
+# and is deliberately never printed — status.sh output gets pasted around.
+echo ""
+echo "Kuma push:"
+LOCAL_FILE="$HOME/.claude-autowake/local.env"
+if [ -f "$LOCAL_FILE" ] && grep -qE '^KUMA_PUSH_URL=.+' "$LOCAL_FILE" 2>/dev/null; then
+    echo "  configured ($LOCAL_FILE)"
+    LAST_BEAT=$(ls -1t "$LOG_DIR"/ping_*.log 2>/dev/null | head -1)
+    if [ -n "$LAST_BEAT" ]; then
+        grep -E 'Kuma heartbeat' "$LAST_BEAT" 2>/dev/null | sed 's/^/  /' \
+            || echo "  (last run logged no heartbeat)"
+    fi
+else
+    echo "  not configured — no dead man's switch on this machine"
+fi
+
 # ── Last ping result ─────────────────────────────────────────────────
 echo ""
 echo "Last ping:"
