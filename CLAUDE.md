@@ -82,3 +82,22 @@ monitor's job is defined as "is autowake alive", not "did it ping today".
 ## Platform
 
 macOS only — depends on launchd, pmset, and caffeinate.
+
+## Testing a ping by hand
+
+Use launchd, not the script directly:
+
+```bash
+launchctl kickstart -p gui/$(id -u)/com.autowake.ping
+```
+
+Running `./autowake.sh` over SSH **always fails**, and not for any reason
+related to autowake. Claude's credentials live in the login Keychain, which an
+SSH session cannot reach; the launchd agent runs in the GUI domain and can. The
+failure looks exactly like an expired login, and — now that the heartbeat is
+wired up — it also pushes a false `status=down` and sets off a real alert.
+
+This produced one false alarm on 2026-07-26, diagnosed as "the login expired"
+until a run through launchd succeeded three seconds later. The general rule it
+belongs to: verify by replaying the path the thing actually takes, not by
+calling a piece of it in isolation.

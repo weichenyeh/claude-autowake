@@ -171,6 +171,18 @@ run_ping() {
     # cause is known before opening a terminal. Trimmed hard: this ends up in
     # a URL and a push message.
     PING_FAIL_REASON="all $attempt attempts failed: $(printf '%s' "$output" | head -1 | cut -c1-120)"
+
+    # A manual run over SSH fails for a reason that has nothing to do with
+    # autowake: Claude's credentials live in the login Keychain, which an SSH
+    # session cannot reach, while the launchd agent runs in the GUI domain and
+    # can. Saying so keeps a self-inflicted failure from reading as an outage —
+    # this exact confusion produced a false alarm on 2026-07-26.
+    if [ -n "${SSH_CONNECTION:-}" ]; then
+        log "NOTE: this ran over SSH, which has no Keychain access. That alone can"
+        log "      cause the failure above. To test the way launchd actually runs it:"
+        log "        launchctl kickstart -p gui/\$(id -u)/com.autowake.ping"
+        PING_FAIL_REASON="$PING_FAIL_REASON [ran over SSH, may be a Keychain artifact]"
+    fi
     return 1
 }
 
