@@ -143,7 +143,11 @@ run_ping() {
             # than having no monitor at all — so it returns a distinct failure.
             # No retry: neither expired credentials nor a rate limit resolves
             # in 60 seconds.
-            if echo "$output" | grep -qiE "unauthorized|auth.*error|invalid.*key|rate.?limit|forbidden|expired"; then
+            # "not logged in" was added after a real expiry on 2026-07-26. It
+            # exited non-zero that time so the failure path caught it anyway,
+            # but the same message arriving with exit 0 would otherwise read
+            # as success.
+            if echo "$output" | grep -qiE "unauthorized|auth.*error|invalid.*key|rate.?limit|forbidden|expired|not logged in"; then
                 log "ERROR: Ping exited 0 but output suggests an error. Check log."
                 PING_FAIL_REASON="exit 0 but output matched an auth/rate-limit pattern"
                 return 2
@@ -153,11 +157,20 @@ run_ping() {
         else
             end_time=$(date +%s)
             PING_DURATION=$(( end_time - start_time ))
+            # Log the output on failure too. It used to be discarded, which
+            # left the log saying only "it failed" — useless in the one
+            # situation the log exists for, namely answering "Kuma says down,
+            # why?". An expired login looked identical to a network outage.
+            echo "$output" | tee -a "$LOG_FILE"
             log "=== Ping failed after ${PING_DURATION}s (attempt $attempt/2) ==="
         fi
     done
     log "ERROR: All ping attempts failed."
-    PING_FAIL_REASON="all $attempt attempts failed"
+    # Carry the first line of the error into the heartbeat, so the phone
+    # notification says "Not logged in" rather than a generic failure and the
+    # cause is known before opening a terminal. Trimmed hard: this ends up in
+    # a URL and a push message.
+    PING_FAIL_REASON="all $attempt attempts failed: $(printf '%s' "$output" | head -1 | cut -c1-120)"
     return 1
 }
 
