@@ -108,3 +108,23 @@ if [ -d "$LOG_DIR" ]; then
 else
     echo "  Log directory not found ($LOG_DIR)"
 fi
+
+# ── What you can do next ──────────────────────────────────────────────
+# Printed here rather than only behind --help, because this report is the
+# thing actually run often enough to be remembered, and a flag you have to
+# remember to ask for is no help months later.
+#
+# Both forms are listed on purpose. The wrapper runs from the MacBook while
+# the scripts run here, so neither form is correct in both places — and
+# showing the pair also documents which wrapper command maps to which script.
+echo ""
+echo "Commands:"
+echo "  From MacBook     autowake                this report"
+echo "                   autowake time           show ping times"
+echo "                   autowake time HH:MM     change ping time"
+echo "                   autowake on | off       off uses no tokens, still reports"
+echo "  On this machine  ./schedule.sh HH:MM     change ping time"
+echo "                   ./toggle.sh on | off    enable / disable"
+echo "                   ./autowake.sh           run one ping now (uses tokens)"
+echo "                   ./sync.sh               reinstall after editing config.sh"
+echo "  Secrets/paths    \$EDITOR $LOCAL_FILE"
