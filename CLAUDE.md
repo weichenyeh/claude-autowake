@@ -24,9 +24,13 @@ Four shell scripts, no build system:
 ./sync.sh          # Install/re-sync launchd agents + pmset wake (sudo for pmset only)
 ./toggle.sh on     # Enable  (no sudo)
 ./toggle.sh off    # Disable (no sudo)
-./status.sh        # Report loaded agents, schedule, pmset wake, last ping result
-./autowake.sh      # Manual test ping
+./status.sh        # Report loaded agents, schedule, pmset wake, last run result
+./schedule.sh 8:30 # Change ping times (no sudo unless the wake time moves)
+./set-push-url.sh  # Store the Kuma push URL (hidden input)
 ./uninstall.sh     # Remove everything
+
+# Test a ping — via launchd, NOT ./autowake.sh (see "Testing a ping by hand")
+launchctl kickstart -p gui/$(id -u)/com.autowake.ping
 ```
 
 Only `autowake.sh` and `config.sh` get copied into `~/.claude-autowake/bin/`, which is
