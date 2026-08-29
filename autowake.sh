@@ -179,7 +179,7 @@ run_ping() {
     # saves the SSH-and-read-logs round trip that diagnosing this by hand
     # otherwise takes (see 2026-08-29 incident).
     if printf '%s' "$first_line" | grep -qiE "oauth|not logged in|unauthorized"; then
-        PING_FAIL_REASON="$PING_FAIL_REASON -> fix: claude login"
+        PING_FAIL_REASON="$PING_FAIL_REASON -> fix: claude auth login"
     fi
 
     # A manual run over SSH fails for a reason that has nothing to do with

@@ -93,6 +93,7 @@ if [[ "${ENABLED:-false}" != "true" ]]; then
 fi
 
 # ENABLED=true — delegate to sync.sh for plist regen + load.
+# Pass AUTOWAKE_SKIP_PMSET=1 so daily toggles don't re-prompt for sudo.
 echo "Enabling autowake (regenerating plists and loading agents)..."
 echo ""
-exec "$SCRIPT_DIR/sync.sh"
+AUTOWAKE_SKIP_PMSET=1 exec "$SCRIPT_DIR/sync.sh"

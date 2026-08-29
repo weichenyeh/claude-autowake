@@ -9,6 +9,9 @@
 # Writes PING_TIMES into ~/.claude-autowake/local.env and re-runs sync.sh to
 # regenerate the launchd plist. The times are machine state, so they never
 # touch a tracked file and the repo stays clean.
+#
+# No sudo unless the pmset recovery time also has to move; sync.sh compares
+# first and says so if it does.
 
 set -euo pipefail
 
