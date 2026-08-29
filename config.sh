@@ -96,9 +96,6 @@ else
 fi
 unset _raw_ping_times _t
 
-# Minutes before the first ping to wake the Mac from sleep.
-WAKE_LEAD_MINUTES=3
-
 # ── Claude CLI ────────────────────────────────────────────────────────
 # Absolute path — launchd runs in a non-interactive, non-login shell whose
 # PATH lacks ~/.local/bin. Using absolute path sidesteps PATH resolution.

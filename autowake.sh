@@ -170,7 +170,17 @@ run_ping() {
     # notification says "Not logged in" rather than a generic failure and the
     # cause is known before opening a terminal. Trimmed hard: this ends up in
     # a URL and a push message.
-    PING_FAIL_REASON="all $attempt attempts failed: $(printf '%s' "$output" | head -1 | cut -c1-120)"
+    local first_line
+    first_line="$(printf '%s' "$output" | head -1 | cut -c1-120)"
+    PING_FAIL_REASON="all $attempt attempts failed: $first_line"
+    # OAuth expiry is the one failure mode that never resolves on its own —
+    # unlike a rate limit or a network blip, it needs a human to click
+    # through a browser login. Naming the fix in the notification itself
+    # saves the SSH-and-read-logs round trip that diagnosing this by hand
+    # otherwise takes (see 2026-08-29 incident).
+    if printf '%s' "$first_line" | grep -qiE "oauth|not logged in|unauthorized"; then
+        PING_FAIL_REASON="$PING_FAIL_REASON -> fix: claude login"
+    fi
 
     # A manual run over SSH fails for a reason that has nothing to do with
     # autowake: Claude's credentials live in the login Keychain, which an SSH

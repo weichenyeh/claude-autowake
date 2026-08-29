@@ -2,7 +2,7 @@
 # toggle.sh — enable/disable autowake (no schedule change)
 #
 # Writes ENABLED into ~/.claude-autowake/local.env, then brings the launchd
-# agents into line. Does NOT touch the pmset wake schedule.
+# agents into line.
 #
 # Usage:
 #   ./toggle.sh on     — start pinging Claude again
@@ -93,7 +93,6 @@ if [[ "${ENABLED:-false}" != "true" ]]; then
 fi
 
 # ENABLED=true — delegate to sync.sh for plist regen + load.
-# Pass AUTOWAKE_SKIP_PMSET=1 so daily toggles don't re-prompt for sudo.
 echo "Enabling autowake (regenerating plists and loading agents)..."
 echo ""
-AUTOWAKE_SKIP_PMSET=1 exec "$SCRIPT_DIR/sync.sh"
+exec "$SCRIPT_DIR/sync.sh"

@@ -203,88 +203,14 @@ else
     echo "  Skipped: $CAFFEINATE_LABEL (ENABLED=false)"
 fi
 
-# ── Schedule pmset wake ───────────────────────────────────────────────
-echo ""
-WAKE_HOUR=$FIRST_HOUR
-WAKE_MINUTE=$(( FIRST_MINUTE - WAKE_LEAD_MINUTES ))
-
-if (( WAKE_MINUTE < 0 )); then
-    WAKE_MINUTE=$(( WAKE_MINUTE + 60 ))
-    WAKE_HOUR=$(( WAKE_HOUR - 1 ))
-fi
-
-WAKE_TIME=$(printf "%02d:%02d:00" "$WAKE_HOUR" "$WAKE_MINUTE")
-
-PMSET_DAYS="MTWRFSU"
-
-# Honor AUTOWAKE_SKIP_PMSET env var (set by toggle.sh for non-first-run toggles)
-if [ "${AUTOWAKE_SKIP_PMSET:-0}" = "1" ]; then
-    echo "Skipping pmset wake schedule (AUTOWAKE_SKIP_PMSET=1)."
-    SKIP_PMSET=true
-fi
-
-# Decide whether pmset needs touching at all, by comparing instead of asking.
-#
-# The old version prompted "overwrite? [y/N]" whenever any repeat schedule
-# existed — but the schedule it found was almost always autowake's own, so the
-# question was noise. Worse, over SSH the read got EOF and `set -e` killed the
-# whole script *after* the agents were loaded but before pmset, leaving a
-# half-applied sync. Comparing the times removes the question in the normal
-# case rather than working around it.
-pmset_current_minutes() {
-    local line t h m ampm
-    line="$(pmset -g sched 2>/dev/null | grep -iE 'wake(or)?poweron' | head -1 || true)"
-    [ -n "$line" ] || return 1
-    t="$(printf '%s' "$line" | grep -oE '[0-9]{1,2}:[0-9]{2}(AM|PM)' | head -1 || true)"
-    [ -n "$t" ] || return 1
-    h="${t%%:*}"
-    m="${t#*:}"
-    ampm="${m: -2}"
-    m="${m%??}"
-    h=$((10#$h)); m=$((10#$m))
-    if [ "$ampm" = "PM" ] && [ "$h" -ne 12 ]; then h=$(( h + 12 )); fi
-    if [ "$ampm" = "AM" ] && [ "$h" -eq 12 ]; then h=0; fi
-    echo $(( h * 60 + m ))
-}
-
-DESIRED_MINUTES=$(( 10#$WAKE_HOUR * 60 + 10#$WAKE_MINUTE ))
-CURRENT_MINUTES="$(pmset_current_minutes || echo "none")"
-
-if [ "${SKIP_PMSET:-}" != "true" ] && [ "$CURRENT_MINUTES" = "$DESIRED_MINUTES" ]; then
-    echo "pmset wake already at $WAKE_TIME — no change needed, no sudo."
-    SKIP_PMSET=true
-fi
-
-# pmset needs a real update but nobody can type a password: say so clearly and
-# carry on. Skipping silently is the same failure as a green light that lies —
-# the schedule would drift out of sync with no trace.
-if [ "${SKIP_PMSET:-}" != "true" ] && [ ! -t 0 ]; then
-    if [ "$CURRENT_MINUTES" = "none" ]; then
-        CURRENT_HUMAN="not set"
-    else
-        CURRENT_HUMAN="$(printf '%02d:%02d' $(( CURRENT_MINUTES / 60 )) $(( CURRENT_MINUTES % 60 )))"
-    fi
-    echo "NOTICE: pmset wake should be $WAKE_TIME but is $CURRENT_HUMAN,"
-    echo "        but this is a non-interactive session so sudo cannot prompt."
-    echo "        Run this on the machine when convenient:"
-    echo "          sudo pmset repeat wakeorpoweron $PMSET_DAYS $WAKE_TIME"
-    echo "        Harmless while this Mac never sleeps. Check with:"
-    echo "          pmset -g custom | grep -E '^ sleep'"
-    SKIP_PMSET=true
-fi
-
-if [ "${SKIP_PMSET:-}" != "true" ]; then
-echo "Setting pmset wake schedule: $PMSET_DAYS at $WAKE_TIME"
-echo "  (This requires sudo — you may be prompted for your password)"
-echo ""
-
-if sudo pmset repeat wakeorpoweron "$PMSET_DAYS" "$WAKE_TIME"; then
-    echo "  pmset wake scheduled successfully."
-else
-    echo "  WARNING: Failed to set pmset wake schedule."
-    echo "  You can set it manually: sudo pmset repeat wakeorpoweron $PMSET_DAYS $WAKE_TIME"
-fi
-fi  # SKIP_PMSET
+# ── pmset ────────────────────────────────────────────────────────────
+# Deliberately left unmanaged, not removed. This Mac runs with system sleep
+# disabled (`pmset -g` shows sleep=0), so there is nothing to wake it from
+# day to day — but `wakeorpoweron` can also power the machine on from a full
+# shutdown (this hardware supports it: `pmset -g cap` lists womp/powernap),
+# which is worth keeping as a future recovery safety net rather than coding
+# away. If that day comes, schedule it by hand:
+#   sudo pmset repeat wakeorpoweron MTWRFSU HH:MM:00
 
 # ── Summary ───────────────────────────────────────────────────────────
 echo ""
@@ -295,17 +221,6 @@ for t in "${PING_TIMES[@]}"; do
     echo "  $t"
 done
 echo ""
-# Report what pmset actually holds, not what was requested. Printing the
-# desired time after declining to set it would be a summary that lies.
-ACTUAL_MINUTES="$(pmset_current_minutes || echo "none")"
-if [ "$ACTUAL_MINUTES" = "$DESIRED_MINUTES" ]; then
-    echo "  Mac wakes at $WAKE_TIME (${WAKE_LEAD_MINUTES} min before first ping)"
-elif [ "$ACTUAL_MINUTES" = "none" ]; then
-    echo "  Mac wake: NOT scheduled (pmset unset — see notice above)"
-else
-    echo "  Mac wake: still $(printf '%02d:%02d' $(( ACTUAL_MINUTES / 60 )) $(( ACTUAL_MINUTES % 60 ))), not the $WAKE_TIME this schedule wants"
-    echo "            (see the pmset notice above; harmless while this Mac never sleeps)"
-fi
 echo "  caffeinate keeps Mac awake for $(( CAFFEINATE_SECONDS / 60 )) min"
 echo ""
 echo "Logs:     $LOG_DIR"
