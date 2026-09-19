@@ -7,7 +7,7 @@
 # Usage:
 #   ./toggle.sh on     — start pinging Claude again
 #   ./toggle.sh off    — stop pinging Claude, keep reporting to Kuma
-#   ./toggle.sh        — act on whatever ENABLED already says
+#   ./toggle.sh        — report the current state, change nothing
 #
 # `off` deliberately leaves the ping agent loaded. The agent is what reports
 # autowake's state to the monitor each day, so unloading it would make Kuma
@@ -32,21 +32,31 @@ CONFIG_FILE="$SCRIPT_DIR/config.sh"
 #
 # An unrecognised argument is a hard error. Silently ignoring it is how
 # `./toggle.sh off` used to *enable* autowake.
+#
+# No argument only reports. It used to re-apply whatever ENABLED already said,
+# but the name reads as "flip it": running it bare to switch autowake off left
+# it on, with output that looked like it had done something.
 DESIRED=""
 case "${1:-}" in
     on)  DESIRED=true  ;;
     off) DESIRED=false ;;
-    "")  ;;
+    "")
+        source "$CONFIG_FILE"
+        if [[ "${ENABLED:-false}" == "true" ]]; then state="ON"; else state="OFF"; fi
+        echo "autowake is $state (ping times: ${PING_TIMES[*]}). Nothing changed."
+        echo "Usage: ./toggle.sh on|off" >&2
+        exit 2
+        ;;
     -h|--help|help)
-        echo "Usage: ./toggle.sh [on|off]"
+        echo "Usage: ./toggle.sh on|off"
         echo "  on   resume pinging Claude"
         echo "  off  stop pinging Claude; keep reporting to Kuma (no tokens used)"
-        echo "  (no argument)  act on whatever ENABLED already says"
+        echo "  (no argument)  report the current state, change nothing"
         exit 0
         ;;
     *)
         echo "toggle.sh: unknown argument '$1'" >&2
-        echo "Usage: ./toggle.sh [on|off]" >&2
+        echo "Usage: ./toggle.sh on|off" >&2
         exit 2
         ;;
 esac

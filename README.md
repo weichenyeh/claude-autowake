@@ -24,8 +24,8 @@ vim config.sh
 ./status.sh
 ```
 
-**Daily on/off** (no sudo): edit `ENABLED` in `config.sh`, run `./toggle.sh`.
-**Schedule change** (re-prompts sudo for pmset): edit `PING_TIMES` etc., re-run `./sync.sh`.
+**Daily on/off** (no sudo): `./toggle.sh on` or `./toggle.sh off`. Without an argument it only reports.
+**Schedule change**: `./schedule.sh HH:MM` (asks for sudo only if the power-loss recovery time has to move).
 
 ## Configuration
 
