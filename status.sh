@@ -11,6 +11,71 @@ PLIST_LABEL="com.autowake.ping"
 CAFFEINATE_LABEL="com.autowake.caffeinate"
 LOG_DIR="$HOME/.claude-autowake/logs"
 
+# ── Machine-readable form ─────────────────────────────────────────────
+# `./status.sh --json` prints the same state as one JSON object, for tools
+# that copy it elsewhere (the owner's notes regenerate their status table from
+# it). Fields may be added but are never renamed, so a reader written against
+# today's output keeps working. The Kuma URL is a secret and stays out, as in
+# the human report.
+#
+# "outcome" is read from the result line autowake.sh writes, so it is one of
+# ok / failed / disabled / unknown — a run cut off before its result line
+# shows as unknown rather than being guessed at.
+if [ "${1:-}" = "--json" ]; then
+    PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist" \
+    LOCAL_FILE="$HOME/.claude-autowake/local.env" LOG_DIR="$LOG_DIR" \
+    LOADED="$(launchctl list "$PLIST_LABEL" &>/dev/null && echo 1 || echo 0)" \
+    exec /usr/bin/python3 - <<'PY'
+import json, os, plistlib, re
+from pathlib import Path
+
+env = {}
+local = Path(os.environ["LOCAL_FILE"])
+if local.exists():
+    for line in local.read_text().splitlines():
+        if "=" in line and not line.lstrip().startswith("#"):
+            k, v = line.split("=", 1)
+            env[k.strip()] = v.strip().strip("'\"")
+
+times = []
+plist = Path(os.environ["PLIST_PATH"])
+if plist.exists():
+    sched = plistlib.loads(plist.read_bytes()).get("StartCalendarInterval", [])
+    for item in sched if isinstance(sched, list) else [sched]:
+        times.append("%02d:%02d" % (item["Hour"], item["Minute"]))
+
+last = None
+logs = sorted(Path(os.environ["LOG_DIR"]).glob("ping_*.log"))
+if logs:
+    lines = logs[-1].read_text(errors="replace").splitlines()
+    stamp = re.compile(r"^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\] ")
+    first = next((m.group(1) for l in lines if (m := stamp.match(l))), None)
+    text = "\n".join(lines)
+    reason = next((l for l in lines if l and not stamp.match(l)), "")
+    if "Autowake is disabled" in text:
+        outcome, detail = "disabled", "disabled by user"
+    elif "Ping completed" in text:
+        outcome, detail = "ok", ""
+    elif "All ping attempts failed" in text:
+        outcome, detail = "failed", reason
+    else:
+        outcome, detail = "unknown", ""
+    kuma = re.findall(r"Kuma heartbeat sent \(status=(\w+)\)", text)
+    last = {"time": first.replace(" ", "T") if first else None, "outcome": outcome,
+            "detail": detail, "kuma_delivery": kuma[-1] if kuma else None,
+            "log": str(logs[-1])}
+
+print(json.dumps({
+    "service": "claude",
+    "enabled": env.get("ENABLED", "true") == "true",
+    "loaded": os.environ["LOADED"] == "1",
+    "daily_times": times,
+    "kuma_configured": bool(env.get("KUMA_PUSH_URL")),
+    "last_run": last,
+}, ensure_ascii=False))
+PY
+fi
+
 echo "=== Claude Autowake Status ==="
 echo ""
 
